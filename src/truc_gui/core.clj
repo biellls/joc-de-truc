@@ -82,7 +82,7 @@
 (defn draw-table [table]
   (when-let [card (:card1 table)]
     (draw-card-slot card :card1))
-  (when-let [card (:card2 2)]
+  (when-let [card (:card2 table)]
     (draw-card-slot card :card2)))
 
 ;;
@@ -132,11 +132,25 @@
           (insideh3 x y) (when (>= (count hand) 3) (nth hand 2))
           :else nil)))
 
+(defn- play-card [state player-key card]
+  (let [table (:table state)
+        hand (get-in state [player-key :hand])
+        slot (get-in state [player-key :slot])]
+    (-> state
+        (assoc-in [player-key :hand] (drop-card card hand))
+        (assoc-in [:table slot] card))))
+
+(defn- computer-play-card [state]
+  {:pre [(not (empty? (get-in state [:p2 :hand])))]}
+  (let [hand (get-in state [:p2 :hand])
+        card (nth hand 0)]
+    (play-card state :p2 card)))
+
 ;;
 ;; quil functions
 ;;
 (defn setup []
-  (q/frame-rate 2)
+  (q/frame-rate 8)
   ; set color mode to hsb (hsv) instead of default rgb.
   (q/color-mode :hsb)
   ; setup function returns initial state. it contains
@@ -147,7 +161,7 @@
    {:img (q/load-image "resources/images/spanish_deck/tapada.jpg")
     :table (empty-table)
     :p1 (Player. :card1 h1 0)
-    :p2 (Player. :card1 h2 0)}))
+    :p2 (Player. :card2 h2 0)}))
 
 (defn update [state]
   ; todo check if update function is needed (not likely)
@@ -162,19 +176,21 @@
   (draw-my-hand (get-in state [:p1 :hand]))
   (draw-table (:table state)))
 
+(defn process-clicked-object [state object]
+  (let [hand (get-in state [:p1 :hand])]
+    (if (is-card? object)
+      (play-card state :p1 object)
+      state)))
+
 (defn process-click
   "Decides appropiate action according to mouse click"
   [state click]
   (when (= (:button click) :left)
-    (let [clicked-object (get-clicked (:x click) (:y click)
-                                      (get-in state [:p1 :hand]))]
-      (if clicked-object
-        (if (is-card? clicked-object)
-          (-> state
-              (assoc-in [:p1 :hand] (drop-card clicked-object (get-in state [:p1 :hand])))
-              (assoc-in [:table :card1] clicked-object))
-          state)
-        state))))
+    (if-let [clicked-object (get-clicked (:x click) (:y click)
+                                         (get-in state [:p1 :hand]))]
+      (-> (process-clicked-object state clicked-object)
+          (computer-play-card))
+      state)))
 
 (q/defsketch truc-gui
   :title "truc de 2"
