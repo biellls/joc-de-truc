@@ -11,6 +11,8 @@
   (if card
     (str (:number card) " de " (name (:suit card)))
     nil))
+(defn is-card? [card]
+  (= (class card) truc_gui.deck.Card))
 
 ;; A deck is just a collection of cards
 (defn- make-deck [suits numbers]

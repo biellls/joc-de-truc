@@ -79,6 +79,12 @@
     (draw-slot posx posy1)
     (draw-slot posx posy2)))
 
+(defn draw-table [table]
+  (when-let [card (:card1 table)]
+    (draw-card-slot card :card1))
+  (when-let [card (:card2 2)]
+    (draw-card-slot card :card2)))
+
 ;;
 ;; functions to deal with game state
 ;;
@@ -106,10 +112,10 @@
 
 (defn get-clicked
   "Given a coordinate, find which object was clicked. Nil if none
-   Possible return values: 1 (first card from player's hand), 2, 3
+   Possible return values: first/second/third card from player's hand
                            :d (deck)
    TODO implement deck click"
-  [x y]
+  [x y hand]
   (let [uxh2 (+ (/ width 2) (/ cardwidth 2)) ;; Upper bound hand 2
         lxh2 (- (/ width 2) (/ cardwidth 2))
         uxh1 (- uxh2 draw-card-offset)
@@ -121,16 +127,16 @@
         insideh1 (inside uxh1 uyh lxh1 lyh)
         insideh2 (inside uxh2 uyh lxh2 lyh)
         insideh3 (inside uxh3 uyh lxh3 lyh)]
-    (cond (insideh1 x y) 1
-          (insideh2 x y) 2
-          (insideh3 x y) 3
+    (cond (insideh1 x y) (when (>= (count hand) 1) (nth hand 0))
+          (insideh2 x y) (when (>= (count hand) 2) (nth hand 1))
+          (insideh3 x y) (when (>= (count hand) 3) (nth hand 2))
           :else nil)))
 
 ;;
 ;; quil functions
 ;;
 (defn setup []
-  (q/frame-rate 10)
+  (q/frame-rate 2)
   ; set color mode to hsb (hsv) instead of default rgb.
   (q/color-mode :hsb)
   ; setup function returns initial state. it contains
@@ -139,7 +145,7 @@
         ncards 3
         [h1 h2] (->> (shuffle deck) (deal nplayers ncards))]
    {:img (q/load-image "resources/images/spanish_deck/tapada.jpg")
-    :table ()
+    :table (empty-table)
     :p1 (Player. :card1 h1 0)
     :p2 (Player. :card1 h2 0)}))
 
@@ -153,22 +159,22 @@
   (q/fill 49 139 87)
   (draw-slots)
   (draw-deck :p1)
-  (draw-card-slot lamo :card1)
-  (draw-my-hand (get-in state [:p1 :hand])))
+  (draw-my-hand (get-in state [:p1 :hand]))
+  (draw-table (:table state)))
 
 (defn process-click
   "Decides appropiate action according to mouse click"
   [state click]
   (when (= (:button click) :left)
-    (let [clicked-object (get-clicked (:x click) (:y click))]
-      (println clicked-object)))
-  state)
-
-;; (defn process-click
-;;   [state click]
-;;   (println "x: " (:x click))
-;;   (println "y: " (:y click))
-;;   state)
+    (let [clicked-object (get-clicked (:x click) (:y click)
+                                      (get-in state [:p1 :hand]))]
+      (if clicked-object
+        (if (is-card? clicked-object)
+          (-> state
+              (assoc-in [:p1 :hand] (drop-card clicked-object (get-in state [:p1 :hand])))
+              (assoc-in [:table :card1] clicked-object))
+          state)
+        state))))
 
 (q/defsketch truc-gui
   :title "truc de 2"
