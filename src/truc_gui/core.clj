@@ -4,11 +4,12 @@
   (:use [truc-gui.deck]
         [truc-gui.hand]
         [truc-gui.table]
-        [truc-gui.truc])
+        [truc-gui.truc]
+        [clojure.test :only [is]])
   (:import [truc_gui.deck Card]))
 
 ;;
-;; constants
+;; Game constants
 ;;
 (def height 650)
 (def width 1000)
@@ -17,8 +18,10 @@
 (def upside-down "resources/images/spanish_deck/tapada.jpg")
 
 ;;
-;; drawing functions
+;; Drawing functions
 ;;
+(def draw-card-offset (+ cardwidth 10))
+
 (declare card-image)
 (defmulti draw-card (fn [entity & args] (class entity)))
 (defmethod draw-card java.lang.String
@@ -36,8 +39,7 @@
   "given a card from player's hand, draws it on the screen"
   [n card]
   (let [cx (- (/ width 2) (/ cardwidth 2))
-        offset (+ cardwidth 10)
-        x ([(- cx offset) cx (+ cx offset)] (dec n))
+        x ([(- cx draw-card-offset) cx (+ cx draw-card-offset)] (dec n))
         y 500]
     (draw-card card x y)))
 
@@ -92,6 +94,38 @@
   [card]
   (str "resources/images/spanish_deck/" (:number card) (name (:suit card)) ".jpg"))
 
+(defn- inside
+  "Constructs function that returns true if arguments x y passed are inside
+   the rectangel formed by ux uy lx ly, where ux > lx uy > ly"
+  [ux uy lx ly]
+  {:pre [(is (> ux lx))
+         (is (> uy ly))]}
+  (fn [x y]
+    (and (>= x lx) (<= x ux)
+         (>= y ly) (<= y uy))))
+
+(defn get-clicked
+  "Given a coordinate, find which object was clicked. Nil if none
+   Possible return values: 1 (first card from player's hand), 2, 3
+                           :d (deck)
+   TODO implement deck click"
+  [x y]
+  (let [uxh2 (+ (/ width 2) (/ cardwidth 2)) ;; Upper bound hand 2
+        lxh2 (- (/ width 2) (/ cardwidth 2))
+        uxh1 (- uxh2 draw-card-offset)
+        lxh1 (- lxh2 draw-card-offset)
+        uxh3 (+ uxh2 draw-card-offset)
+        lxh3 (+ lxh2 draw-card-offset)
+        uyh (+ 500 cardheight)
+        lyh 500
+        insideh1 (inside uxh1 uyh lxh1 lyh)
+        insideh2 (inside uxh2 uyh lxh2 lyh)
+        insideh3 (inside uxh3 uyh lxh3 lyh)]
+    (cond (insideh1 x y) 1
+          (insideh2 x y) 2
+          (insideh3 x y) 3
+          :else nil)))
+
 ;;
 ;; quil functions
 ;;
@@ -120,8 +154,21 @@
   (draw-slots)
   (draw-deck :p1)
   (draw-card-slot lamo :card1)
-  (draw-my-hand (get-in state [:p1 :hand]))
-  )
+  (draw-my-hand (get-in state [:p1 :hand])))
+
+(defn process-click
+  "Decides appropiate action according to mouse click"
+  [state click]
+  (when (= (:button click) :left)
+    (let [clicked-object (get-clicked (:x click) (:y click))]
+      (println clicked-object)))
+  state)
+
+;; (defn process-click
+;;   [state click]
+;;   (println "x: " (:x click))
+;;   (println "y: " (:y click))
+;;   state)
 
 (q/defsketch truc-gui
   :title "truc de 2"
@@ -132,6 +179,7 @@
   ; it updates sketch state.
   :update update
   :draw draw
+  :mouse-clicked process-click
   ; this sketch uses functional-mode middleware.
   ; check quil wiki for more info about middlewares and particularly
   ; fun-mode.
