@@ -132,20 +132,29 @@
           (insideh3 x y) (when (>= (count hand) 3) (nth hand 2))
           :else nil)))
 
+(defn- change-turn [state]
+  {:pre [(is (or (= (:turn state) :p1)
+                 (= (:turn state) :p2)))]}
+  (let [turn (:turn state)]
+    (if (= turn :p1)
+      (assoc state :turn :p2)
+      (assoc state :turn :p1))))
+
 (defn- play-card [state player-key card]
   (let [table (:table state)
         hand (get-in state [player-key :hand])
         slot (get-in state [player-key :slot])]
     (-> state
         (assoc-in [player-key :hand] (drop-card card hand))
-        (assoc-in [:table slot] card))))
+        (assoc-in [:table slot] card)
+        (assoc :time 0)
+        (change-turn))))
 
 (defn- computer-play-card [state]
   {:pre [(not (empty? (get-in state [:p2 :hand])))]}
   (let [hand (get-in state [:p2 :hand])
         card (nth hand 0)]
     (play-card state :p2 card)))
-
 ;;
 ;; quil functions
 ;;
@@ -161,11 +170,17 @@
    {:img (q/load-image "resources/images/spanish_deck/tapada.jpg")
     :table (empty-table)
     :p1 (Player. :card1 h1 0)
-    :p2 (Player. :card2 h2 0)}))
+    :p2 (Player. :card2 h2 0)
+    :turn :p1
+    :time 0}))
 
 (defn update [state]
-  ; todo check if update function is needed (not likely)
-  state)
+  (if (= (:turn state) :p2)
+    (if (< (:time state) 8)
+      (assoc state :time (inc (:time state)))
+      (-> state
+         (computer-play-card)))
+    state))
 
 
 (defn draw [state]
@@ -185,12 +200,12 @@
 (defn process-click
   "Decides appropiate action according to mouse click"
   [state click]
-  (when (= (:button click) :left)
+  (if (and (= (:button click) :left) (= :p1 (:turn state)))
     (if-let [clicked-object (get-clicked (:x click) (:y click)
                                          (get-in state [:p1 :hand]))]
-      (-> (process-clicked-object state clicked-object)
-          (computer-play-card))
-      state)))
+      (-> (process-clicked-object state clicked-object))
+      state)
+    state))
 
 (q/defsketch truc-gui
   :title "truc de 2"
