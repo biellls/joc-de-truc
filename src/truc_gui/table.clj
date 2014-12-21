@@ -5,14 +5,14 @@
 
 ;; A table contains two slots for players to place their cards
 ;; It also keeps track of the round winners (round can be inferenced
-;; from the lis t of winners
+;; from the list of winners)
 (defrecord Table [card1 card2 winners])
 (defn empty-table [] (Table. nil nil []))
 
 (defn place-card [table slot card]
-  {:pre [(is (#{:card1 :card2} slot))]}
-  (assoc table slot card))
-(defn clear-table [table] (assoc table :card1 nil :card2 nil))
+  {:pre [(is (#{:card1 :card2} slot))
+         (is (< (count (slot table)) 3))]}
+  (assoc table slot (conj (slot table) card)))
 (defn write-winner
   "Writes the specified player as the winner in the current round"
   [player table]
