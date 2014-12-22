@@ -57,7 +57,7 @@
             y (- starty n)]
         (draw-card upside-down x y)))))
 
-(defn draw-card-slot [path slot]
+(defn draw-card-slot [card slot]
   {:pre [(or (= slot :card1) (= slot :card2))]}
   (let [posx (- (/ width 2) (/ cardwidth 2))
         posy1 (- (* 11 (/ height 20)) (/ cardheight 2))
@@ -67,7 +67,7 @@
         rotation 0.1]
     (q/with-translation [posx posy]
      (q/with-rotation [rotation]
-       (draw-card path)))))
+       (draw-card card)))))
 
 (defn draw-slots []
   (let [swidth 130
@@ -80,10 +80,9 @@
     (draw-slot posx posy2)))
 
 (defn draw-table [table]
-  (when-let [card (:card1 table)]
-    (draw-card-slot card :card1))
-  (when-let [card (:card2 table)]
-    (draw-card-slot card :card2)))
+  (doseq [s [:card1 :card2]]
+   (when-let [card (top-card s table)]
+     (draw-card-slot card s))))
 
 ;;
 ;; functions to deal with game state
@@ -140,13 +139,16 @@
       (assoc state :turn :p2)
       (assoc state :turn :p1))))
 
+(defn- my-place-card [state slot card]
+  (assoc state :table (place-card (:table state) slot card)))
+
 (defn- play-card [state player-key card]
   (let [table (:table state)
         hand (get-in state [player-key :hand])
         slot (get-in state [player-key :slot])]
     (-> state
         (assoc-in [player-key :hand] (drop-card card hand))
-        (assoc-in [:table slot] card)
+        (my-place-card slot card)
         (assoc :time 0)
         (change-turn))))
 
@@ -155,6 +157,7 @@
   (let [hand (get-in state [:p2 :hand])
         card (nth hand 0)]
     (play-card state :p2 card)))
+
 ;;
 ;; quil functions
 ;;
@@ -182,7 +185,6 @@
          (computer-play-card)))
     state))
 
-
 (defn draw [state]
   (q/background 140)
   (q/fill 49 139 87)
@@ -191,7 +193,7 @@
   (draw-my-hand (get-in state [:p1 :hand]))
   (draw-table (:table state)))
 
-(defn process-clicked-object [state object]
+(defn- process-clicked-object [state object]
   (let [hand (get-in state [:p1 :hand])]
     (if (is-card? object)
       (play-card state :p1 object)

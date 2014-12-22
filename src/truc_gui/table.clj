@@ -7,7 +7,7 @@
 ;; It also keeps track of the round winners (round can be inferenced
 ;; from the list of winners)
 (defrecord Table [card1 card2 winners])
-(defn empty-table [] (Table. nil nil []))
+(defn empty-table [] (Table. '() '() []))
 
 (defn place-card
   "Places a card on the specified slot (several cards can be on the slot, but
@@ -15,7 +15,8 @@
    The slot is represented as a list, so the current card is always the first"
   [table slot card]
   {:pre [(is (#{:card1 :card2} slot))
-         (is (< (count (slot table)) 3))]}
+         (is (< (count (slot table)) 3))]
+   :post [(is (not (or (nil? table))))]}
   (assoc table slot (conj (slot table) card)))
 
 (defn top-card
@@ -31,7 +32,9 @@
   {:pre [(is (< (count (:winners table)) 3))]}
   (assoc table :winners (conj (:winners table) player)))
 
-(defn get-winner [table]
+(defn get-winner
+  "A player wins if he has won two rounds. Nil if there is no winner yet"
+  [table]
   (let [[p q] (distinct (:winners table))
         {fp p, fq q} (frequencies (:winners table))]
     (cond (empty? (:winners table)) nil
@@ -43,4 +46,5 @@
   "By counting the number of round winners we know how many rounds have already
    been played. Therefore the current round must be 1 + nº of rounds played"
   [table]
+  {:post [(is (< % 4))]}
   (inc (count (:winners table))))
