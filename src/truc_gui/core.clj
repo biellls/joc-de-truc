@@ -234,6 +234,51 @@
         card (peek-card 1 hand)]
     (play-card state :p2 card)))
 
+(defn- update-computer
+  "Makes a move if appropriate"
+  [state]
+  (if (his-turn? :p2 state)
+    (let [current-time (get-time state)]
+      (if (< current-time 8)
+        (set-time (inc current-time) state)
+        (-> state
+            (computer-play-card)
+            state)))
+    state))
+
+(defn- update-text [state]
+  (let [header "Truc\n"
+        winner (get-winner (get-table state))
+        message (str header
+                     (when winner
+                       (str "Player " (name winner) " wins!!!")))]
+    (assoc state :text message)))
+
+(defn- advance-round [table winner]
+  (->> table
+       (write-winner winner)
+       ;(clear-table)
+       ))
+
+(defn- fight-ready? [table]
+  (let [round (get-round table)
+        ncards1 (ncards-placed :card1 table)
+        ncards2 (ncards-placed :card2 table)]
+    (= round ncards1 ncards2)))
+    
+
+(defn- update-game-state
+  "Performs various tasks to manage game state, such as fighting cards and
+   advancing rounds"
+  [state]
+  (let [table (get-table state)]
+   (if (fight-ready? table)
+     (let [card1 (top-card :card1 table)
+           card2 (top-card :card2 table)
+           winner (fight card1 card2)]
+       (set-table state (advance-round table winner)))
+     state)))
+
 ;;
 ;; quil functions
 ;;
@@ -250,19 +295,18 @@
     :p1 (Player. :card1 h1 0)
     :p2 (Player. :card2 h2 0)
     :turn :p1
-    :time 0}))
+    :time 0
+    :text "Truc\nP1P2"}))
 
 (defn update [state]
-  (if (= (get-turn state) :p2)
-    (let [current-time (get-time state)]
-      (if (< current-time 8)
-        (set-time (inc current-time) state)
-        (-> state
-            (computer-play-card))))
-    state))
+  (-> state
+      (update-computer)
+      (update-text)))
 
 (defn draw [state]
   (q/background 140)
+  (q/fill 255 255 255)
+  (q/text (:text state) 10 15)
   (q/fill 49 139 87)
   (draw-deck (get-turn state))
   (draw-my-hand (get-hand :p1 state))
@@ -307,3 +351,8 @@
 ;;    :update update
 ;;    :draw draw
 ;;    :middleware [m/fun-mode]))
+
+;;;;;Remaining tasks;;;;;;;;;;;;;
+;;TODO refactor code
+;;TODO make cards not disappear when new one is placed
+
