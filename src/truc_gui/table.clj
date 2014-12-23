@@ -26,6 +26,9 @@
   [slot table]
   (first (slot table)))
 
+(defn ncards-placed [slot table]
+  (count (slot table)))
+
 (defn write-winner
   "Writes the specified player as the winner in the current round"
   [player table]

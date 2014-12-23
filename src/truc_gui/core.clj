@@ -49,7 +49,9 @@
   (dotimes [n (count hand)]
     (draw-my-card (inc n) (peek-card (inc n) hand))))
 
-(defn draw-deck [player]
+(defn draw-deck
+  "Draws the deck near the player that dealed the cards in this round"
+  [player]
   (let [startx 750
         starty (if (= player :p1) 450 50)]
     (dotimes [n 10]
@@ -80,6 +82,7 @@
     (draw-slot posx posy2)))
 
 (defn draw-table [table]
+  (draw-slots)
   (doseq [s [:card1 :card2]]
    (when-let [card (top-card s table)]
      (draw-card-slot card s))))
@@ -131,13 +134,45 @@
           (insideh3 x y) (when (>= (count hand) 3) (nth hand 2))
           :else nil)))
 
-(defn- change-turn [state]
-  {:pre [(is (or (= (:turn state) :p1)
-                 (= (:turn state) :p2)))]}
-  (let [turn (:turn state)]
-    (if (= turn :p1)
-      (assoc state :turn :p2)
-      (assoc state :turn :p1))))
+(defn- set-turn [player state]
+  (assoc state :turn player))
+(defn- his-turn? [player state]
+  (= (:turn state) player))
+(defn- ncards-played [player-key state]
+  (let [player (player-key state)]
+    (ncards-placed (:slot player) (:table state))))
+(defn- round-winner
+  "Given a state, calculates which of the player's card wins the round
+   TODO rename top-card and implement higher level method named top-card"
+  [state]
+  {:pre [(let [ncards1 (ncards-played :p1 state)
+               ncards2 (ncards-played :p2 state)
+               round (get-round (:table state))]
+           (is (= ncards1 ncards2))
+           (is (= ncards1 round)))]}
+  (let [table (:table state)
+        card1 (top-card :card1 table)
+        card2 (top-card :card2 table)]
+    (fight card1 card2)))
+(defn- write-round-winner [winner state]
+  (assoc state :table (write-winner winner (:table state))))
+
+(defn- change-turn
+  "Changes turn to other player if necessary.
+   If only one player has played a card this round, give the turn to the other
+   player.
+   If both have played, give the turn to the player with the winning card"
+  [state]
+  {:pre [(is (or (his-turn? :p1 state)
+                 (his-turn? :p2 state)))]}
+  (cond (< (ncards-played :p1 state)
+           (ncards-played :p2 state)) (set-turn :p1 state)
+        (< (ncards-played :p2 state)
+           (ncards-played :p1 state)) (set-turn :p2 state)
+        :else (let [winner (round-winner state)]
+                (->> state
+                     (set-turn winner)
+                     (write-round-winner winner)))))
 
 (defn- my-place-card [state slot card]
   (assoc state :table (place-card (:table state) slot card)))
@@ -188,8 +223,7 @@
 (defn draw [state]
   (q/background 140)
   (q/fill 49 139 87)
-  (draw-slots)
-  (draw-deck :p1)
+  (draw-deck (:turn state))
   (draw-my-hand (get-in state [:p1 :hand]))
   (draw-table (:table state)))
 
