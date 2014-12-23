@@ -59,14 +59,12 @@
             y (- starty n)]
         (draw-card upside-down x y)))))
 
-(defn draw-card-slot [card slot]
+(defn draw-card-slot [rotation card slot]
   {:pre [(or (= slot :card1) (= slot :card2))]}
   (let [posx (- (/ width 2) (/ cardwidth 2))
         posy1 (- (* 11 (/ height 20)) (/ cardheight 2))
         posy2 (- (* 5 (/ height 20)) (/ cardheight 2))
-        posy (if (= :card1 slot) posy1 posy2)
-        ;rotation (rand 0.3)
-        rotation 0.1]
+        posy (if (= :card1 slot) posy1 posy2)]
     (q/with-translation [posx posy]
      (q/with-rotation [rotation]
        (draw-card card)))))
@@ -85,19 +83,14 @@
 (defn draw-table [table]
   (draw-slots)
   (doseq [s [:card1 :card2]]
-   (when-let [card (top-card s table)]
-     (draw-card-slot card s))))
+    (let [n (ncards-placed s table)]
+      (doseq [i (reverse (range 1 (inc n)))]
+        (draw-card-slot (peek-angle i s table) (peek-card-table i s table) s)))))
 
 ;;;;
 ;; functions to deal with game state
 ;;;;
 ;; player: has a specified slot on the table, a hand of 3 cards and a score
-;; {:img (q/load-image "resources/images/spanish_deck/tapada.jpg")
-;;     :table (empty-table)
-;;     :p1 (Player. :card1 h1 0)
-;;     :p2 (Player. :card2 h2 0)
-;;     :turn :p1
-;;     :time 0}
 (defrecord Player [slot hand score])
 (defn empty-player [slot] (Player. slot [] 0))
 
@@ -218,9 +211,12 @@
                      (set-turn winner)
                      (write-round-winner winner)))))
 
-(defn- my-place-card [slot card state]
-  (let [table (get-table state)]
-    (set-table (place-card table slot card) state)))
+(defn- my-place-card
+  "Places the card on the table with a random angle of inclination"
+  [slot card state]
+  (let [table (get-table state)
+        rotation (- (rand 0.6) 0.3)]
+    (set-table (place-card table slot card rotation) state)))
 
 (defn- play-card [state player-key card]
   (let [table (get-table state)
