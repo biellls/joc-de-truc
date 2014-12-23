@@ -45,7 +45,7 @@
           (= 2 fq) q
           :else nil)))
 
-(defn get-round
+(defn get-round-table
   "By counting the number of round winners we know how many rounds have already
    been played. Therefore the current round must be 1 + nº of rounds played"
   [table]

@@ -8,18 +8,18 @@
         [clojure.test :only [is]])
   (:import [truc_gui.deck Card]))
 
-;;
+;;;;
 ;; Game constants
-;;
+;;;;
 (def height 650)
 (def width 1000)
 (def cardwidth 100)
 (def cardheight 139)
 (def upside-down "resources/images/spanish_deck/tapada.jpg")
 
-;;
+;;;;
 ;; Drawing functions
-;;
+;;;;
 (def draw-card-offset (+ cardwidth 10))
 
 (declare card-image)
@@ -81,22 +81,55 @@
     (draw-slot posx posy1)
     (draw-slot posx posy2)))
 
+;; TODO draw all cards
 (defn draw-table [table]
   (draw-slots)
   (doseq [s [:card1 :card2]]
    (when-let [card (top-card s table)]
      (draw-card-slot card s))))
 
-;;
+;;;;
 ;; functions to deal with game state
-;;
+;;;;
 ;; player: has a specified slot on the table, a hand of 3 cards and a score
+;; {:img (q/load-image "resources/images/spanish_deck/tapada.jpg")
+;;     :table (empty-table)
+;;     :p1 (Player. :card1 h1 0)
+;;     :p2 (Player. :card2 h2 0)
+;;     :turn :p1
+;;     :time 0}
 (defrecord Player [slot hand score])
 (defn empty-player [slot] (Player. slot [] 0))
 
-;;
+(defn- set-turn [player state]
+  (if player
+    (assoc state :turn player)
+    state))
+(defn- get-turn [state]
+  (:turn state))
+(defn- get-player [player-key state]
+  (player-key state))
+(defn- set-player [player-key player state]
+  (assoc state player-key player))
+(defn- get-time [state] (:time state))
+(defn- set-time [time state]
+  (assoc state :time time))
+(defn- get-table [state] (:table state))
+(defn- set-table [table state]
+  (assoc state :table table))
+(defn- get-slot [player-key state]
+  (let [player (get-player player-key state)]
+    (:slot player)))
+(defn- get-hand [player-key state]
+  (let [player (get-player player-key state)]
+    (:hand player)))
+(defn- set-hand [player-key hand state]
+  (let [player (get-player player-key state)]
+    (set-player player-key (assoc player :hand hand) state)))
+
+;;;;
 ;; Auxiliary functions
-;;
+;;;;
 (defn card-image
   "Given a card, returns the card's image path"
   [card]
@@ -111,6 +144,12 @@
   (fn [x y]
     (and (>= x lx) (<= x ux)
          (>= y ly) (<= y uy))))
+
+(defn- get-clicked-card
+  "Retuns the card that the player selected from the screen"
+  [n hand]
+  (when (>= (count hand) n)
+    (peek-card n hand)))
 
 (defn get-clicked
   "Given a coordinate, find which object was clicked. Nil if none
@@ -129,33 +168,38 @@
         insideh1 (inside uxh1 uyh lxh1 lyh)
         insideh2 (inside uxh2 uyh lxh2 lyh)
         insideh3 (inside uxh3 uyh lxh3 lyh)]
-    (cond (insideh1 x y) (when (>= (count hand) 1) (nth hand 0))
-          (insideh2 x y) (when (>= (count hand) 2) (nth hand 1))
-          (insideh3 x y) (when (>= (count hand) 3) (nth hand 2))
+    (cond (insideh1 x y) (get-clicked-card 1 hand)
+          (insideh2 x y) (get-clicked-card 2 hand)
+          (insideh3 x y) (get-clicked-card 3 hand)
           :else nil)))
 
-(defn- set-turn [player state]
-  (assoc state :turn player))
+(defn top-card-player [player-key state]
+  (let [slot (get-slot player-key state)
+        table (get-table state)]
+    (top-card slot table)))
+
 (defn- his-turn? [player state]
-  (= (:turn state) player))
+  (= (get-turn state) player))
 (defn- ncards-played [player-key state]
-  (let [player (player-key state)]
-    (ncards-placed (:slot player) (:table state))))
+  (let [slot (get-slot player-key state)
+        table (get-table state)]
+    (ncards-placed slot table)))
+(defn- get-round [state]
+  (get-round-table (get-table state)))
 (defn- round-winner
-  "Given a state, calculates which of the player's card wins the round
-   TODO rename top-card and implement higher level method named top-card"
+  "Given a state, calculates which player wins the round"
   [state]
   {:pre [(let [ncards1 (ncards-played :p1 state)
                ncards2 (ncards-played :p2 state)
-               round (get-round (:table state))]
+               round (get-round state)]
            (is (= ncards1 ncards2))
            (is (= ncards1 round)))]}
-  (let [table (:table state)
-        card1 (top-card :card1 table)
-        card2 (top-card :card2 table)]
+  (let [card1 (top-card-player :p1 state)
+        card2 (top-card-player :p2 state)]
     (fight card1 card2)))
 (defn- write-round-winner [winner state]
-  (assoc state :table (write-winner winner (:table state))))
+  (let [table (get-table state)]
+    (set-table (write-winner winner table) state)))
 
 (defn- change-turn
   "Changes turn to other player if necessary.
@@ -174,23 +218,24 @@
                      (set-turn winner)
                      (write-round-winner winner)))))
 
-(defn- my-place-card [state slot card]
-  (assoc state :table (place-card (:table state) slot card)))
+(defn- my-place-card [slot card state]
+  (let [table (get-table state)]
+    (set-table (place-card table slot card) state)))
 
 (defn- play-card [state player-key card]
-  (let [table (:table state)
-        hand (get-in state [player-key :hand])
-        slot (get-in state [player-key :slot])]
-    (-> state
-        (assoc-in [player-key :hand] (drop-card card hand))
+  (let [table (get-table state)
+        hand (get-hand player-key state)
+        slot (get-slot player-key state)]
+    (->> state
+        (set-hand player-key (drop-card card hand))
         (my-place-card slot card)
-        (assoc :time 0)
+        (set-time 0)
         (change-turn))))
 
 (defn- computer-play-card [state]
-  {:pre [(not (empty? (get-in state [:p2 :hand])))]}
-  (let [hand (get-in state [:p2 :hand])
-        card (nth hand 0)]
+  {:pre [(not (empty? (get-hand :p2 state)))]}
+  (let [hand (get-hand :p2 state)
+        card (peek-card 1 hand)]
     (play-card state :p2 card)))
 
 ;;
@@ -205,30 +250,30 @@
   (let [nplayers 2
         ncards 3
         [h1 h2] (->> (shuffle deck) (deal nplayers ncards))]
-   {:img (q/load-image "resources/images/spanish_deck/tapada.jpg")
-    :table (empty-table)
+   {:table (empty-table)
     :p1 (Player. :card1 h1 0)
     :p2 (Player. :card2 h2 0)
     :turn :p1
     :time 0}))
 
 (defn update [state]
-  (if (= (:turn state) :p2)
-    (if (< (:time state) 8)
-      (assoc state :time (inc (:time state)))
-      (-> state
-         (computer-play-card)))
+  (if (= (get-turn state) :p2)
+    (let [current-time (get-time state)]
+      (if (< current-time 8)
+        (set-time (inc current-time) state)
+        (-> state
+            (computer-play-card))))
     state))
 
 (defn draw [state]
   (q/background 140)
   (q/fill 49 139 87)
-  (draw-deck (:turn state))
-  (draw-my-hand (get-in state [:p1 :hand]))
-  (draw-table (:table state)))
+  (draw-deck (get-turn state))
+  (draw-my-hand (get-hand :p1 state))
+  (draw-table (get-table state)))
 
 (defn- process-clicked-object [state object]
-  (let [hand (get-in state [:p1 :hand])]
+  (let [hand (get-hand :p1 state)]
     (if (is-card? object)
       (play-card state :p1 object)
       state)))
@@ -236,9 +281,9 @@
 (defn process-click
   "Decides appropiate action according to mouse click"
   [state click]
-  (if (and (= (:button click) :left) (= :p1 (:turn state)))
+  (if (and (= (:button click) :left) (his-turn? :p1 state))
     (if-let [clicked-object (get-clicked (:x click) (:y click)
-                                         (get-in state [:p1 :hand]))]
+                                         (get-hand :p1 state))]
       (-> (process-clicked-object state clicked-object))
       state)
     state))
